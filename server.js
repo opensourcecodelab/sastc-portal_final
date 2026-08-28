@@ -21,7 +21,7 @@ app.post('/api/advisor', async (req, res) => {
     
     let historyContext = "";
     if (history && history.length > 0) {
-      historyContext = "\nSaved Academic History (Chronological):\n" + history.map(h => `- Level ${h.level} Semester ${h.semester}: Term GPA ${h.termGpa}, Credits ${h.credits}`).join("\n");
+      historyContext = "\nSaved Academic History (Chronological):\n" + history.map(h => `- Level ${h.level} Semester ${h.semester}: Term GPA ${h.gpa}, Credits ${h.totalCredits}`).join("\n");
     }
 
     const prompt = `You are an AI Academic Advisor for a student at HSTU. 

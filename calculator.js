@@ -388,17 +388,8 @@ export function initCalculator() {
             success = true;
             break;
           } else if (data.text) {
-            // format standard markdown headers and bullets cleanly
-            let formattedText = data.text
-              .replace(/## (.*?)\n/g, '<h3 class="font-bold text-lg mt-4 mb-2">$1</h3>')
-              .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-              .replace(/\* (.*?)(?=\n|$)/g, '<li class="ml-4 list-disc">$1</li>')
-              .replace(/\n/g, '<br>');
-              
-            // cleanup stray breaks inside lists
-            formattedText = formattedText.replace(/<\/li><br>/g, '</li>');
-
-            aiAdvisorText.innerHTML = formattedText;
+            const htmlContent = marked.parse(data.text);
+            aiAdvisorText.innerHTML = htmlContent;
             
             // Save to localStorage as structured history
             const analysisHistory = JSON.parse(localStorage.getItem('sastc_advisor_history')) || [];
@@ -406,8 +397,7 @@ export function initCalculator() {
               date: new Date().toISOString(),
               level: calcLevel.value,
               semester: calcSemester.value,
-              text: data.text,
-              html: formattedText
+              text: data.text
             });
             localStorage.setItem('sastc_advisor_history', JSON.stringify(analysisHistory));
             
@@ -445,7 +435,10 @@ export function initCalculator() {
           const dateStr = new Date(item.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
           const div = document.createElement('div');
-          div.className = 'bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden transition-all';
+          div.className = 'bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden transition-all shrink-0';
+          
+          const htmlContent = item.html || (window.marked ? marked.parse(item.text) : item.text);
+          
           div.innerHTML = `
             <div class="flex justify-between items-center p-3 cursor-pointer hover:bg-indigo-50/50 transition-colors advisor-history-header" data-idx="${originalIndex}">
               <div>
@@ -462,7 +455,7 @@ export function initCalculator() {
               </div>
             </div>
             <div class="advisor-history-body ${isExpanded ? 'block' : 'hidden'} p-3 border-t border-gray-100 text-sm text-gray-700 prose prose-sm max-w-none bg-gray-50">
-              ${item.html}
+              ${htmlContent}
             </div>
           `;
 

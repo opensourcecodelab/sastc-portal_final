@@ -51,11 +51,14 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(DATA_CACHE_NAME).then((cache) => {
         return fetch(event.request).then((response) => {
-          if (response.status === 200) {
+          if (response && response.status === 200) {
             cache.put(event.request, response.clone());
+            return response;
           }
-          return response;
+          // If network failed but didn't throw (e.g. 500 error), try cache
+          return cache.match(event.request).then(cached => cached || response);
         }).catch(() => {
+          // Offline fallback
           return cache.match(event.request);
         });
       })
