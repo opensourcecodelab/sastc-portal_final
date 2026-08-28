@@ -59,13 +59,31 @@ app.post('/api/advisor', async (req, res) => {
       }
     });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: prompt,
-      config: {
-        systemInstruction: "You are an empathetic, motivating academic advisor for university students. Communicate in a mix of Bengali and English. Be structured, concise, and highly relevant."
+    let response;
+    let retries = 3;
+    let delay = 1000;
+    while (retries > 0) {
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents: prompt,
+          config: {
+            systemInstruction: "You are an empathetic, motivating academic advisor for university students. Communicate in a mix of Bengali and English. Be structured, concise, and highly relevant."
+          }
+        });
+        break;
+      } catch (e) {
+        if (e.message && (e.message.includes("503") || e.message.includes("429") || e.message.includes("UNAVAILABLE"))) {
+          retries--;
+          if (retries === 0) throw e;
+          console.log(`API high demand/overloaded. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2;
+        } else {
+          throw e;
+        }
       }
-    });
+    }
 
     res.json({ text: response.text });
   } catch (error) {
@@ -82,6 +100,11 @@ app.post('/api/advisor', async (req, res) => {
     if (error.message && (error.message.includes("403") || error.message.includes("PERMISSION_DENIED") || error.message.includes("denied access"))) {
       console.error("Gemini API Error: Project has been denied access (403).");
       return res.status(403).json({ error: "API Key Permission Denied (403). Your project may be restricted. Please add a new API Key in Settings." });
+    }
+    
+    if (error.message && (error.message.includes("503") || error.message.includes("UNAVAILABLE"))) {
+      console.error("Gemini API Error: Service Unavailable / Overloaded (503).");
+      return res.status(503).json({ error: "The AI service is currently experiencing high demand. Please try again in a few moments." });
     }
     
     console.error("Gemini API Error:", error);
