@@ -35,13 +35,10 @@ window.shareLink = shareLink;
 // Storage Keys
 const LS_ACTIVE_DEPT = "sastc_active_dept";
 const LS_DEPT_PREF = "sastc_dept_preference";
-const LS_NOTIFICATIONS_ENABLED = "sastc_notifications_enabled";
-const LS_SEEN_NOTICES_COUNT = "sastc_seen_notices_count";
-const LS_SEEN_RESULTS_COUNT = "sastc_seen_results_count";
 
 // State variables
 let activeDept = localStorage.getItem(LS_ACTIVE_DEPT) || "ALL";
-let deptPreference = localStorage.getItem(LS_DEPT_PREF) || "CSE";
+let deptPreference = localStorage.getItem(LS_DEPT_PREF) || "";
 let activeTab = "home";
 
 let noticesData = [];
@@ -62,21 +59,8 @@ document.addEventListener("DOMContentLoaded", () => {
   resultList = document.getElementById("resultList");
 
   initDeptPreference();
-  initPushNotificationsToggle();
+  initDepartmentWelcome();
   initApiKeysManagement();
-
-  const LS_SEEN_NOTICES_COUNT = "sastc_seen_notices_count";
-  const LS_SEEN_RESULTS_COUNT = "sastc_seen_results_count";
-
-  // Migrate old storage keys to new format to prevent sudden large badge numbers
-  if (localStorage.getItem(LS_SEEN_NOTICES_COUNT)) {
-    localStorage.setItem("seen_notices_ALL", localStorage.getItem(LS_SEEN_NOTICES_COUNT));
-    localStorage.removeItem(LS_SEEN_NOTICES_COUNT);
-  }
-  if (localStorage.getItem(LS_SEEN_RESULTS_COUNT)) {
-    localStorage.setItem("seen_results_ALL", localStorage.getItem(LS_SEEN_RESULTS_COUNT));
-    localStorage.removeItem(LS_SEEN_RESULTS_COUNT);
-  }
 
   const cached = loadCachedData();
   noticesData = cached.noticesData;
@@ -105,49 +89,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (hasUpdates) {
       rebuildMasterDataset();
       renderAllViews();
-      updateBadges();
       
-      const seenNoticesKey = `seen_notices_${deptPreference}`;
-      const seenResultsKey = `seen_results_${deptPreference}`;
-      const seenNotices = parseInt(localStorage.getItem(seenNoticesKey) || 0);
-      const seenResults = parseInt(localStorage.getItem(seenResultsKey) || 0);
-      
-      const noticesSet = getFilteredNoticesSet();
-      const resultsSet = getFilteredResultsSet();
-
-      notifyUpdates(Math.max(0, noticesSet.length - seenNotices), Math.max(0, resultsSet.length - seenResults));
     }
   });
 });
-
-function initPushNotificationsToggle() {
-  const toggle = document.getElementById("pushNotificationToggle");
-  if (!toggle) return;
-  
-  toggle.checked = localStorage.getItem(LS_NOTIFICATIONS_ENABLED) === "true" && Notification.permission === "granted";
-  
-  toggle.addEventListener("change", async (e) => {
-    if (e.target.checked) {
-      if (!("Notification" in window)) {
-        showToast("Push notifications not supported on this browser.");
-        e.target.checked = false;
-        return;
-      }
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        localStorage.setItem(LS_NOTIFICATIONS_ENABLED, "true");
-        showToast("Push notifications enabled!");
-      } else {
-        localStorage.setItem(LS_NOTIFICATIONS_ENABLED, "false");
-        e.target.checked = false;
-        showToast("Permission denied for notifications.");
-      }
-    } else {
-      localStorage.setItem(LS_NOTIFICATIONS_ENABLED, "false");
-      showToast("Push notifications disabled.");
-    }
-  });
-}
 
 function initApiKeysManagement() {
   const inputEl = document.getElementById("newApiKeyInput");
@@ -219,65 +164,8 @@ function initApiKeysManagement() {
   renderKeys();
 }
 
-function notifyUpdates(newNotices, newResults) {
-  if (localStorage.getItem(LS_NOTIFICATIONS_ENABLED) === "true" && Notification.permission === "granted") {
-    if (newNotices > 0) new Notification("SASTC Portal", { body: `You have ${newNotices} new notice(s)!` });
-    if (newResults > 0) new Notification("SASTC Portal", { body: `You have ${newResults} new result(s)!` });
-  }
-}
-
-function getFilteredNoticesSet() {
-  let filtered = masterDataset.filter(item => !item._isResult);
-  if (deptPreference !== "ALL") {
-    filtered = filtered.filter(item => item._deptCode === deptPreference);
-  }
-  return filtered;
-}
-
-function getFilteredResultsSet() {
-  let results = masterDataset.filter(item => {
-    if (!item._isResult) return false;
-    const text = `${item.title || ''} ${item.department || ''} ${item.category || ''}`.toUpperCase();
-    return /\bSASTC\b/i.test(text);
-  });
-  if (deptPreference !== "ALL") {
-    results = results.filter(item => {
-      const text = `${item.title || ''} ${item.department || ''} ${item.category || ''}`.toUpperCase();
-      return new RegExp(`\\b${deptPreference}\\b`, "i").test(text);
-    });
-  }
-  return results;
-}
-
-function updateBadges() {
-  const seenNoticesKey = `seen_notices_${deptPreference}`;
-  const seenResultsKey = `seen_results_${deptPreference}`;
-  
-  const seenNotices = parseInt(localStorage.getItem(seenNoticesKey) || 0);
-  const seenResults = parseInt(localStorage.getItem(seenResultsKey) || 0);
-  
-  const noticesSet = getFilteredNoticesSet();
-  const resultsSet = getFilteredResultsSet();
-
-  const newNotices = Math.max(0, noticesSet.length - seenNotices);
-  const newResults = Math.max(0, resultsSet.length - seenResults);
-
-  const noticeBadge = document.getElementById("navNoticeBadge");
-  const resultBadge = document.getElementById("navResultBadge");
-
-  if (noticeBadge) {
-    noticeBadge.textContent = newNotices;
-    noticeBadge.style.display = newNotices > 0 ? "inline-block" : "none";
-  }
-  if (resultBadge) {
-    resultBadge.textContent = newResults;
-    resultBadge.style.display = newResults > 0 ? "inline-block" : "none";
-  }
-}
-
 function rebuildMasterDataset() {
   masterDataset = indexDataset(noticesData, resultsData);
-  updateBadges();
 }
 
 /**
@@ -286,32 +174,43 @@ function rebuildMasterDataset() {
 function initDeptPreference() {
   const selectEl = document.getElementById("deptPreferenceSelect");
   if (selectEl) {
-    selectEl.value = deptPreference;
-    selectEl.addEventListener("change", (e) => {
-      deptPreference = e.target.value;
-      localStorage.setItem(LS_DEPT_PREF, deptPreference);
-
-      if (deptPreference !== "ALL") {
-        activeDept = deptPreference;
-        localStorage.setItem(LS_ACTIVE_DEPT, activeDept);
-      }
-
-      // If we are currently viewing the notice or result tab, mark the newly filtered items as read
-      const seenNoticesKey = `seen_notices_${deptPreference}`;
-      const seenResultsKey = `seen_results_${deptPreference}`;
-      
-      if (activeTab === "notice") {
-        localStorage.setItem(seenNoticesKey, getFilteredNoticesSet().length);
-      } else if (activeTab === "result") {
-        localStorage.setItem(seenResultsKey, getFilteredResultsSet().length);
-      }
-
-      window.dispatchEvent(new Event('sastc_dept_changed'));
-      renderAllViews();
-      updateBadges();
-      showToast(`Filter set to ${deptPreference}`);
-    });
+    if (deptPreference) selectEl.value = deptPreference;
+    selectEl.addEventListener("change", (e) => applyDepartment(e.target.value, true));
   }
+}
+
+function applyDepartment(department, showFeedback = false) {
+  if (!["CSE", "AG", "BBA"].includes(department)) return;
+  deptPreference = department;
+  activeDept = department;
+  localStorage.setItem(LS_DEPT_PREF, department);
+  localStorage.setItem(LS_ACTIVE_DEPT, department);
+  const selectEl = document.getElementById("deptPreferenceSelect");
+  if (selectEl) selectEl.value = department;
+  window.dispatchEvent(new Event("sastc_dept_changed"));
+  renderAllViews();
+  const modal = document.getElementById("departmentWelcomeModal");
+  if (modal) modal.hidden = true;
+  document.body.classList.remove("department-modal-open");
+  if (showFeedback) showToast(`Department set to ${department}`);
+}
+
+function initDepartmentWelcome() {
+  const modal = document.getElementById("departmentWelcomeModal");
+  const select = document.getElementById("welcomeDepartmentSelect");
+  const continueBtn = document.getElementById("saveWelcomeDepartmentBtn");
+  if (!modal || !select || !continueBtn) return;
+
+  const savedDepartment = localStorage.getItem(LS_DEPT_PREF);
+  if (["CSE", "AG", "BBA"].includes(savedDepartment)) {
+    deptPreference = savedDepartment;
+    modal.hidden = true;
+    return;
+  }
+
+  modal.hidden = false;
+  document.body.classList.add("department-modal-open");
+  continueBtn.addEventListener("click", () => applyDepartment(select.value, false));
 }
 
 /**
@@ -335,19 +234,6 @@ function triggerHaptic() {
 function switchTab(tabName) {
   console.log("Switching to tab:", tabName);
   activeTab = tabName;
-
-  const seenNoticesKey = `seen_notices_${deptPreference}`;
-  const seenResultsKey = `seen_results_${deptPreference}`;
-
-  if (tabName === "notice") {
-    const noticesSet = getFilteredNoticesSet();
-    localStorage.setItem(seenNoticesKey, noticesSet.length);
-    updateBadges();
-  } else if (tabName === "result") {
-    const resultsSet = getFilteredResultsSet();
-    localStorage.setItem(seenResultsKey, resultsSet.length);
-    updateBadges();
-  }
 
   document.querySelectorAll(".bottom-nav .nav-item").forEach(btn => {
     btn.classList.toggle("active", btn.getAttribute("data-tab") === tabName);
@@ -666,18 +552,5 @@ function initEventListeners() {
   updateOnlineStatus();
 }
 
-// Vertical Card Sliding Animation
-const scrollObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      entry.target.classList.add('visible');
-      scrollObserver.unobserve(entry.target);
-    }
-  });
-}, { threshold: 0.1, rootMargin: '0px 0px -20px 0px' });
-
-function observeCards() {
-  document.querySelectorAll('.card-animate:not(.visible)').forEach(card => {
-    scrollObserver.observe(card);
-  });
-}
+// Cards render immediately; no scroll observer or entrance animation is used.
+function observeCards() {}

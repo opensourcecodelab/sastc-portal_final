@@ -2,8 +2,8 @@
  * Standalone Service Worker for Offline Caching
  */
 
-const CACHE_NAME = 'sastc-portal-v002';
-const DATA_CACHE_NAME = 'sastc-data-cache-v002';
+const CACHE_NAME = 'sastc-portal-v004';
+const DATA_CACHE_NAME = 'sastc-data-cache-v004';
 
 const ASSETS_TO_CACHE = [
   './',
